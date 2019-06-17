@@ -763,7 +763,7 @@ class Client(HasTraits):
             if msg_id in self.history:
                 print("got stale result: %s"%msg_id)
             else:
-                print("got unknown result: %s"%msg_id)
+                print("AAAAA got unknown result: %s"%msg_id)
         else:
             self.outstanding.remove(msg_id)
 
@@ -811,7 +811,7 @@ class Client(HasTraits):
                 print(self.results[msg_id])
                 print(msg)
             else:
-                print("got unknown result: %s"%msg_id)
+                print("BBBBB got unknown result: %s"%msg_id)
         else:
             self.outstanding.remove(msg_id)
         content = msg['content']
