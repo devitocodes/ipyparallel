@@ -16,7 +16,7 @@ import json
 import os
 from pprint import pprint
 import sys
-from threading import Thread, Event, current_thread
+from threading import Thread, Event, Lock, current_thread
 import time
 import types
 import warnings
@@ -520,6 +520,10 @@ class Client(HasTraits):
         except:
             self.close(linger=0)
             raise
+
+        # will need a lock to avoid race conditions over shared data structures,
+        # such as `outstanding` and `history`
+        self._lock = Lock()
 
         # last step: setup magics, if we are in IPython:
 
@@ -1454,16 +1458,17 @@ class Client(HasTraits):
         future = self._send(socket, "apply_request", buffers=bufs, ident=ident,
                             metadata=metadata, track=track)
 
-        msg_id = future.msg_id
-        self.outstanding.add(msg_id)
-        if ident:
-            # possibly routed to a specific engine
-            if isinstance(ident, list):
-                ident = ident[-1]
-            if ident in self._engines.values():
-                # save for later, in case of engine death
-                self._outstanding_dict[ident].add(msg_id)
-        self.history.append(msg_id)
+        with self._lock:
+            msg_id = future.msg_id
+            self.outstanding.add(msg_id)
+            if ident:
+                # possibly routed to a specific engine
+                if isinstance(ident, list):
+                    ident = ident[-1]
+                if ident in self._engines.values():
+                    # save for later, in case of engine death
+                    self._outstanding_dict[ident].add(msg_id)
+            self.history.append(msg_id)
 
         return future
 
@@ -1490,17 +1495,18 @@ class Client(HasTraits):
         future = self._send(socket, "execute_request", content=content, ident=ident,
                             metadata=metadata)
 
-        msg_id = future.msg_id
-        self.outstanding.add(msg_id)
-        if ident:
-            # possibly routed to a specific engine
-            if isinstance(ident, list):
-                ident = ident[-1]
-            if ident in self._engines.values():
-                # save for later, in case of engine death
-                self._outstanding_dict[ident].add(msg_id)
-        self.history.append(msg_id)
-        self.metadata[msg_id]['submitted'] = util.utcnow()
+        with self._lock:
+            msg_id = future.msg_id
+            self.outstanding.add(msg_id)
+            if ident:
+                # possibly routed to a specific engine
+                if isinstance(ident, list):
+                    ident = ident[-1]
+                if ident in self._engines.values():
+                    # save for later, in case of engine death
+                    self._outstanding_dict[ident].add(msg_id)
+            self.history.append(msg_id)
+            self.metadata[msg_id]['submitted'] = util.utcnow()
 
         return future
 
